@@ -89,7 +89,19 @@ enum EdgeState {
     Above, Below, Left, Right,
 }
 
-fn is_nori_able(omino: &[(i32, i32)]) -> bool {
+#[derive(Debug, PartialEq, Eq)]
+struct Edge {
+    state: EdgeState,
+    pos: i32,
+    len: u32,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum NoriPos {
+    None, Float, Edge, Corner,
+}
+
+fn nori_pos(omino: &[(i32, i32)]) -> NoriPos {
     let mut edges = HashSet::new();
     for (x, y) in omino {
         for (state, dx, dy) in [
@@ -115,7 +127,7 @@ fn is_nori_able(omino: &[(i32, i32)]) -> bool {
             edges.remove(&edge);
         }
     }
-    let mut edge_groups: Vec<Vec<(EdgeState, i32)>> = Vec::new();
+    let mut edge_groups: Vec<Vec<Edge>> = Vec::new();
     while !edges.is_empty() {
         let mut group = Vec::new();
         let mut que = (|| {
@@ -134,13 +146,22 @@ fn is_nori_able(omino: &[(i32, i32)]) -> bool {
             }
             None
         };
-        let (mut tmp, mut cnt) = (que.unwrap().2, 0);
+        let (mut tx, mut ty, mut tmp) = que.unwrap();
+        let mut cnt = 0;
         while let Some((x, y, state)) = que {
             if tmp == state {
                 cnt += 1;
             } else {
-                group.push((tmp, cnt));
+                group.push(Edge {
+                    state: tmp,
+                    pos: match tmp {
+                        EdgeState::Left | EdgeState::Right => ty,
+                        _ => tx,
+                    },
+                    len: cnt,
+                });
                 (tmp, cnt) = (state, 1);
+                (tx, ty) = (x, y);
             }
             que = match state {
                 EdgeState::Above => take_next(x  , y+1),
@@ -149,30 +170,65 @@ fn is_nori_able(omino: &[(i32, i32)]) -> bool {
                 EdgeState::Right => take_next(x+1, y  ),
             }
         }
-        group.push((tmp, cnt));
-        if group.first().unwrap().0 == group.last().unwrap().0 {
-            group[0].1 += group.last().unwrap().1;
+        group.push(Edge {
+            state: tmp,
+            pos: match tmp {
+                EdgeState::Left | EdgeState::Right => ty,
+                _ => tx,
+            },
+            len: cnt,
+        });
+        if group.first().unwrap().state == group.last().unwrap().state {
+            group[0].len += group.last().unwrap().len;
             group.pop();
         }
         edge_groups.push(group);
     }
-    return edge_groups.iter().all(|group| {
-        for i in 0..group.len() {
-            let (state1, len1) = group[i];
-            let (state2, len2) = group[(i+1)%group.len()];
-            if len1 >= 3 { return false; }
-            match (state1, state2) {
-                (EdgeState::Above, EdgeState::Left ) => continue,
-                (EdgeState::Left , EdgeState::Below) => continue,
-                (EdgeState::Below, EdgeState::Right) => continue,
-                (EdgeState::Right, EdgeState::Above) => continue,
-                _ => (),
+    let mut leftest = 0;
+    for groups in edge_groups.iter() {
+        for edge in groups.iter() {
+            if edge.state == EdgeState::Below && edge.pos < leftest {
+                leftest = edge.pos;
             }
-            if len1 == 1 && len2 == 1 { return false; }
-            if len1 >= 2 && len2 >= 2 { return false; }
         }
-        return true;
-    });
+    }
+    // float, edge, corner, edge2
+    let res = edge_groups.iter().fold((true, true, true, true),
+        |mut acc, group| {
+            for i in 0..group.len() {
+                let mut t = (true, true, true, true);
+                let Edge { state: s1, pos: p1, len: l1 } = group[i];
+                let Edge { state: s2, pos: _, len: l2 } = group[(i+1)%group.len()];
+                if s1 == EdgeState::Below && p1 == leftest {
+                    t.2 = false; t.3 = false;
+                }
+                if s1 == EdgeState::Right && p1 == 0 { t.1 = false; t.2 = false; }
+                if l1 >= 3 { t.0 = false; }
+                match (s1, s2) {
+                    (EdgeState::Above, EdgeState::Left)
+                        | (EdgeState::Left, EdgeState::Below)
+                        | (EdgeState::Below, EdgeState::Right)
+                        | (EdgeState::Right, EdgeState::Above)
+                        => (),
+                    _ => {
+                        if l1 == 1 && l2 == 1 { t.0 = false; }
+                        if l1 >= 2 && l2 >= 2 { t.0 = false; }
+                    },
+                }
+                acc.0 &= t.0;
+                if t.1 { acc.1 &= t.0; }
+                if t.2 { acc.2 &= t.0; }
+                if t.3 { acc.3 &= t.0; }
+            }
+            acc
+        });
+    return match res {
+        (false, false, true, true) => NoriPos::None,
+        (false, false, false, _) => NoriPos::None,
+        (false, false, true, _) => NoriPos::Corner,
+        (false, true, _, _) => NoriPos::Edge,
+        (true, _, _, _) => NoriPos::Float,
+    }
 }
 
 fn main() {
@@ -180,9 +236,27 @@ fn main() {
     let n: usize = args[1].parse().unwrap();
     let mut ominos = GenOmino::new();
     ominos.dfs(n);
+    let mut f = Vec::new();
+    let mut e = Vec::new();
+    let mut c = Vec::new();
     for omino in ominos.output {
-        if is_nori_able(&omino) {
-            GenOmino::print(&omino);
+        match nori_pos(&omino) {
+            NoriPos::None => (),
+            NoriPos::Float => { f.push(omino); }
+            NoriPos::Edge => { e.push(omino); }
+            NoriPos::Corner => { c.push(omino); }
         }
+    }
+    for omino in f {
+        println!("Float");
+        GenOmino::print(&omino);
+    }
+    for omino in e {
+        println!("Edge");
+        GenOmino::print(&omino);
+    }
+    for omino in c {
+        println!("Corner");
+        GenOmino::print(&omino);
     }
 }
