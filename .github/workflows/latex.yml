@@ -7,8 +7,9 @@ jobs:
       - uses: actions/checkout@v3
       - uses: xu-cheng/latex-action@v2
         with:
-          root_file: ./latex/*.tex
+          root_file: "*.tex"
           glob_root_file: true
+          working_directory: ./latex
           latexmk_use_lualatex: true
       - run: |
           mkdir -p public/latex
