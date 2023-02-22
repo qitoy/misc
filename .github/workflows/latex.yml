@@ -1,5 +1,9 @@
 name: LaTeX compile
-on: [push]
+on:
+  push:
+    paths:
+      - ".github/workflows/latex.yml"
+      - "latex/*.tex"
 jobs:
   compile:
     runs-on: ubuntu-latest
@@ -11,11 +15,11 @@ jobs:
         with:
           root_file: "*.tex"
           glob_root_file: true
-          working_directory: ./latex
+          working_directory: latex
           latexmk_use_lualatex: true
       - run: |
           mkdir -p public/latex
-          mv ./latex/*.pdf ./public/latex
+          mv latex/*.pdf public/latex
       - uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
