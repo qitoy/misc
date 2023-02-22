@@ -1,0 +1,89 @@
+\documentclass[a4paper, fleqn]{ltjsarticle}
+\usepackage{amsmath,amsfonts,amssymb,amsthm,mathtools}
+\mathtoolsset{showonlyrefs=true}
+\usepackage{bm}
+\usepackage{graphicx}
+\usepackage{physics}
+\usepackage{tikz}
+\usetikzlibrary{intersections,calc,arrows.meta,patterns}
+\usepackage[top=15truemm, bottom=20truemm, left=15truemm, right=15truemm]{geometry}
+\usepackage{luacode}
+\renewcommand{\labelenumi}{(\arabic{enumi})}
+\usepackage{ascmac}
+\title{Fusing Slimes 解説}
+\author{しゅどぼ}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{はじめに}
+
+公式解説とは違ってゴリゴリの計算をします。
+
+\section{問題の読み替え}
+
+まず操作全体は次のように読み替えられることがわかります。
+
+\begin{screen}
+    $(1, \ldots, N-1)$の順列を選び、これを$P$とします。$i$番目の操作では、スライム$P_i$を右隣のスライムの位置まで移動させて合体させます。
+    この操作でのスライムの移動距離の総和を全ての順列について足し合せた値を$10^9+7$で割ったあまりを求めてください。
+\end{screen}
+
+この問題文から計算をしていくことになります。恐らく、部分点解法は挿入DPを用いるのだと思います。しかし$2 \leq N \leq 10^5$であるので、挿入DPの$O(N^2)$解法は通用しません。
+
+\section{立式}
+
+スライム$i$がスライム$j$まで移動するような順列を数え上げることにします(ただし$i<j$)。このときの移動距離は$x_j - x_i$です。これは$j$が$N$かそうでないかによって場合分けする必要があります。
+
+\begin{itemize}
+    \item $j < N$のとき \\
+        スライム$i+1, \ldots, j-1$を先に移動させ、次にスライム$i$、そしてスライム$j$を移動させます。その他は操作に影響しません。よって、$i, \ldots, j$を固定してから、$i+1, \ldots, j-1$を自由に動かすと考えられるので、
+        \[
+            \frac{(N-1)!(j-i-1)!}{(j-i+1)!}
+            = \frac{(N-1)!}{(j-i+1)(j-i)}
+            = (N-1)! \qty(\frac{1}{j-i} - \frac{1}{j-i+1})
+            \quad(\text{通り})
+        \]
+
+    \item $j = N$のとき \\
+        スライム$i+1, \ldots, N-1$を先に移動させ、次にスライム$i$を移動させます。その他は操作に影響しません。よって、$i, \ldots, N-1$を固定してから、$i+1, \ldots, N-1$を自由に動かすと考えられるので、
+        \[
+            \frac{(N-1)!(N-i-1)!}{(N-i)!}
+            = (N-1)! \frac{1}{N-i}
+            \quad(\text{通り})
+        \]
+\end{itemize}
+
+よってこれに移動距離を掛け合わせ、すべての$(i,j)$の組に対して足し合わせれば求める答えになります。
+
+\section{計算}
+
+\begin{align}
+    & \sum_{1 \leq i < j < N} (x_j-x_i) \cdot (N-1)! \qty(\frac{1}{j-i} - \frac{1}{j-i+1})
+    + \sum_{1 \leq i < N} (x_N-x_i) \cdot (N-1)! \frac{1}{N-i} \\
+    =& (N-1)! \qty(
+        \sum_{1 \leq i < j \leq N} (x_j-x_i) \cdot \frac{1}{j-i}
+        - \sum_{1 \leq i < j < N} (x_j-x_i) \cdot \frac{1}{j-i+1}
+    ) && (\text{和の組み換え}) \\
+    =& (N-1)! \qty(
+        \sum_{1 \leq i < i+k \leq N} \frac{x_{i+k}-x_i}{k}
+        - \sum_{1 \leq i < i+k-1 < N} \frac{x_{i+k-1}-x_i}{k}
+    ) && (\text{置換}) \\
+    =& (N-1)! \qty(
+        \sum_{1 \leq i < i+k \leq N} \frac{x_{i+k}-x_i}{k}
+        - \sum_{1 \leq i < i+k \leq N} \frac{x_{i+k-1}-x_i}{k}
+    ) && (\text{添字調整}) \\
+    =& (N-1)! \sum_{1 \leq k < i+k \leq N} \frac{x_{i+k}-x_{i+k-1}}{k}
+     && (\text{まとめる}) \\
+    =& (N-1)! \sum_{1 \leq k \leq N-1} \frac{x_N-x_k}{k}
+    && (\text{$i$について総和})\\
+\end{align}
+
+あとはこれを愚直にmodintなどを用いて書けばACです。
+
+\section{おわりに}
+
+計算力を鍛えて数学問を殴ろう
+
+\end{document}
