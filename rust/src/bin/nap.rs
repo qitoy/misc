@@ -15,8 +15,7 @@ struct GenOmino {
     output: Vec<Vec<(i32, i32)>>,
 }
 
-impl GenOmino {
-    fn print(states: &[(i32, i32)]) {
+fn omino_print(states: &[(i32, i32)]) {
         let (mut left, mut right, mut above) = (0, 0, 0);
         for &(x, y) in states {
             left = if x < left { x } else { left };
@@ -35,9 +34,9 @@ impl GenOmino {
             println!("{}", str);
         }
         println!();
-        
-    }
+}
 
+impl GenOmino {
     fn dfs(&mut self, n: usize) {
         if n == 0 {
             self.output.push(
@@ -81,7 +80,48 @@ impl GenOmino {
             states: vec![(OminoState::Queue, 0, 0)],
         }
     }
+}
 
+fn reverse_omino(omino: &mut Vec<(i32, i32)>) {
+    let mut dx = 0;
+    for (x, y) in omino.iter_mut() {
+        if *y == 0 && dx < *x { dx = *x; }
+    }
+    for (x, _) in omino.iter_mut() {
+        *x = dx - *x;
+    }
+    omino.sort();
+}
+
+fn rotate_omino(omino: &mut Vec<(i32, i32)>) {
+    let (mut dx, mut dy) = (0, 0);
+    for (x, _) in omino.iter_mut() {
+        if *x < dx { dx = *x; }
+    }
+    for (x, y) in omino.iter_mut() {
+        if *x == dx && dy < *y { dy = *y; }
+    }
+    for (x, y) in omino.iter_mut() {
+        (*x, *y) = (dy - *y, *x - dx);
+    }
+    omino.sort();
+}
+
+fn tidy_ominos(ominos: &mut Vec<Vec<(i32, i32)>>) {
+    let mut ret = HashSet::new();
+    for omino in ominos.iter_mut() {
+        if (|| {
+            for _ in 0..4 {
+                rotate_omino(omino);
+                for _ in 0..2 {
+                    reverse_omino(omino);
+                    if ret.contains(omino) { return false; }
+                }
+            }
+            true
+        })() { ret.insert(omino.clone()); };
+    }
+    *ominos = ret.into_iter().collect();
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
@@ -96,12 +136,12 @@ struct Edge {
     len: u32,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd)]
 enum NoriPos {
-    None, Float, Edge, Corner,
+    None, Corner, Edge, Float,
 }
 
-fn nori_pos(omino: &[(i32, i32)]) -> NoriPos {
+fn extract_edges(omino: &[(i32, i32)]) -> HashSet<(i32, i32, EdgeState)> {
     let mut edges = HashSet::new();
     for (x, y) in omino {
         for (state, dx, dy) in [
@@ -113,20 +153,23 @@ fn nori_pos(omino: &[(i32, i32)]) -> NoriPos {
             edges.insert((x+dx, y+dy, state));
         }
     }
-    {
-        let mut edges_dub = Vec::new();
-        for (x, y, state) in edges.iter() {
-            match state {
-                EdgeState::Above => edges_dub.push((*x  , *y+1, EdgeState::Below)),
-                EdgeState::Below => edges_dub.push((*x  , *y-1, EdgeState::Above)),
-                EdgeState::Left  => edges_dub.push((*x-1, *y  , EdgeState::Right)),
-                EdgeState::Right => edges_dub.push((*x+1, *y  , EdgeState::Left )),
-            }
-        }
-        for edge in edges_dub {
-            edges.remove(&edge);
+    let mut edges_dub = Vec::new();
+    for (x, y, state) in edges.iter() {
+        match state {
+            EdgeState::Above => edges_dub.push((*x  , *y+1, EdgeState::Below)),
+            EdgeState::Below => edges_dub.push((*x  , *y-1, EdgeState::Above)),
+            EdgeState::Left  => edges_dub.push((*x-1, *y  , EdgeState::Right)),
+            EdgeState::Right => edges_dub.push((*x+1, *y  , EdgeState::Left )),
         }
     }
+    for edge in edges_dub {
+        edges.remove(&edge);
+    }
+    edges
+}
+
+fn nori_pos(omino: &[(i32, i32)]) -> NoriPos {
+    let mut edges = extract_edges(omino);
     let mut edge_groups: Vec<Vec<Edge>> = Vec::new();
     while !edges.is_empty() {
         let mut group = Vec::new();
@@ -232,15 +275,23 @@ fn nori_pos(omino: &[(i32, i32)]) -> NoriPos {
 }
 
 fn main() {
+    #![allow(unreachable_code)]
     let args: Vec<String> = env::args().collect();
     let n: usize = args[1].parse().unwrap();
     let mut ominos = GenOmino::new();
     ominos.dfs(n);
+    tidy_ominos(&mut ominos.output);
     let mut f = Vec::new();
     let mut e = Vec::new();
     let mut c = Vec::new();
-    for omino in ominos.output {
-        match nori_pos(&omino) {
+    for omino in ominos.output.iter_mut() {
+        let mut state = NoriPos::None;
+        for _ in 0..4 {
+            rotate_omino(omino);
+            let ret = nori_pos(omino);
+            if state < ret { state = ret; }
+        }
+        match state {
             NoriPos::None => (),
             NoriPos::Float => { f.push(omino); }
             NoriPos::Edge => { e.push(omino); }
@@ -249,14 +300,14 @@ fn main() {
     }
     for omino in f {
         println!("Float");
-        GenOmino::print(&omino);
+        omino_print(&omino);
     }
     for omino in e {
         println!("Edge");
-        GenOmino::print(&omino);
+        omino_print(&omino);
     }
     for omino in c {
         println!("Corner");
-        GenOmino::print(&omino);
+        omino_print(&omino);
     }
 }
